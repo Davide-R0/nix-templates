@@ -1,54 +1,59 @@
 {
-  description = "Ambiente di sviluppo Rust";
+  description = "Rust development environment";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    
-    # Questo overlay ci fornisce le versioni di rust selezionabili
-    rust-overlay.url = "github:oxalica/rust-overlay";
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, rust-overlay, ... }: let
-    supportedSystems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
-    forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
-  in {
-    devShells = forAllSystems (system: let
-      overlays = [ (import rust-overlay) ];
-      pkgs = import nixpkgs {
-        inherit system overlays;
-      };
-      
-      # === CONFIGURAZIONE TOOLCHAIN ===
-      # Qui scegliamo la versione.
-      # Opzione A: Ultima Stable (aggiornata automaticamente)
-      # rustToolchain = pkgs.rust-bin.stable.latest.default;
-      
-      # Opzione B: Una versione specifica (per riproducibilità)
-      # rustToolchain = pkgs.rust-bin.stable."1.75.0".default;
+  outputs = { self, nixpkgs, flake-utils }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = nixpkgs.legacyPackages.${system};
+        # Read the file relative to the flake's root
+        overrides = (builtins.fromTOML (builtins.readFile (self + "/rust-toolchain.toml")));
+      in
+      {
+        devShells.default = pkgs.mkShell rec {
+          nativeBuildInputs = [ pkgs.pkg-config ];
+          buildInputs = with pkgs; [
+            clang
+            llvmPackages.bintools
+            rustup
+          ];
 
-      # Opzione C (LA MIGLIORE): Legge il file rust-toolchain.toml del progetto!
-      # Così collabori con chi usa rustup senza problemi.
-      rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-    };
-
-    in {
-      default = pkgs.mkShell {
-        buildInputs = [
-          rustToolchain
+          RUSTC_VERSION = overrides.toolchain.channel;
           
-          # Dipendenze comuni che servono quasi sempre in Rust
-          pkgs.openssl
-          pkgs.pkg-config # Cruciale per trovare le librerie C
-        ];
+          # https://github.com/rust-lang/rust-bindgen#environment-variables
+          LIBCLANG_PATH = pkgs.lib.makeLibraryPath [ pkgs.llvmPackages_latest.libclang.lib ];
+          
+          shellHook = ''
+            export PATH=$PATH:''${CARGO_HOME:-~/.cargo}/bin
+            export PATH=$PATH:''${RUSTUP_HOME:-~/.rustup}/toolchains/$RUSTC_VERSION-x86_64-unknown-linux-gnu/bin/
+          '';
 
-        # Variabili d'ambiente utili
-        RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
-        
-        shellHook = ''
-           echo "🦀 Rust Environment Loaded"
-           echo "Version: $(rustc --version)"
-        '';
-      };
-    });
-  };
+          # Add precompiled library to rustc search path
+          RUSTFLAGS = (builtins.map (a: ''-L ${a}/lib'') [
+            # add libraries here (e.g. pkgs.libvmi)
+          ]);
+          
+          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (buildInputs ++ nativeBuildInputs);
+
+          
+          # Add glibc, clang, glib, and other headers to bindgen search path
+          BINDGEN_EXTRA_CLANG_ARGS =
+          # Includes normal include path
+          (builtins.map (a: ''-I"${a}/include"'') [
+            # add dev libraries here (e.g. pkgs.libvmi.dev)
+            pkgs.glibc.dev
+          ])
+          # Includes with special directory paths
+          ++ [
+            ''-I"${pkgs.llvmPackages_latest.libclang.lib}/lib/clang/${pkgs.llvmPackages_latest.libclang.version}/include"''
+            ''-I"${pkgs.glib.dev}/include/glib-2.0"''
+            ''-I${pkgs.glib.out}/lib/glib-2.0/include/''
+          ];
+        };
+      }
+    );
 }

@@ -1,5 +1,5 @@
 {
-  description = "Ambiente di sviluppo Rust (Zero Rustup)";
+  description = "Ambiente di sviluppo Rust";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -19,13 +19,17 @@
       };
       
       # === CONFIGURAZIONE TOOLCHAIN ===
-      # Qui scegli la versione. Esempi:
-      # - pkgs.rust-bin.stable.latest.default
-      # - pkgs.rust-bin.nightly."2024-01-01".default
-      # - pkgs.rust-bin.stable."1.75.0".default
-      rustToolchain = pkgs.rust-bin.stable.latest.default.override {
-        extensions = [ "rust-src" "rust-analyzer" ];
-      };
+      # Qui scegliamo la versione.
+      # Opzione A: Ultima Stable (aggiornata automaticamente)
+      # rustToolchain = pkgs.rust-bin.stable.latest.default;
+      
+      # Opzione B: Una versione specifica (per riproducibilità)
+      # rustToolchain = pkgs.rust-bin.stable."1.75.0".default;
+
+      # Opzione C (LA MIGLIORE): Legge il file rust-toolchain.toml del progetto!
+      # Così collabori con chi usa rustup senza problemi.
+      rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+    };
 
     in {
       default = pkgs.mkShell {

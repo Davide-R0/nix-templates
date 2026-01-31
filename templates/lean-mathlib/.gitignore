@@ -1,0 +1,36 @@
+# Ignore build outputs from performing a nix-build or `nix build` command
+result
+result-*
+
+# Ignore automatically generated direnv output
+.direnv
+
+.env
+
+# --- Artifact di Lake (FONDAMENTALE) ---
+/.lake
+#.lake/
+#lake-packages/
+
+# --- Regole specifiche per la documentazione ---
+# Ignora la cartella di build dentro docbuild
+docbuild/.lake/
+docbuild/build/
+docbuild/lake-packages/
+
+# --- Build legacy o output manuali ---
+build/
+out/
+dist/
+
+# --- File di sistema (OS) ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# --- IDE / Editor ---
+.vscode/*
+!.vscode/extensions.json
+!.vscode/tasks.json
+*.swp
+*~
